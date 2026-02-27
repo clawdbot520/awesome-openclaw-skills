@@ -1,6 +1,6 @@
 ---
 name: podcast-transcriber
-description: Automatically transcribe Podcast audio to text. Use when user says "transcribe", "transcript", "generate notes" for Podcast audio, or "convert OOO to text".
+description: Automatically transcribe Podcast audio to summary report. Use when user says "transcribe", "transcript", "generate notes" for Podcast audio, or "convert OOO to text".
 ---
 
 # Podcast Transcriber
