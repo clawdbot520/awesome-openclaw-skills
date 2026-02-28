@@ -6,6 +6,7 @@ A collection of custom skills for OpenClaw.
 
 | Skill | Description |
 |-------|-------------|
+| [claude-code-bridge](./claude-code-bridge/) | Dispatch coding tasks to Claude Code with Telegram notifications |
 | [podcast-transcriber](./podcast-transcriber/) | Automatically transcribe Podcast audio to text |
 
 ## Installation

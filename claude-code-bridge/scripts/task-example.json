@@ -1,0 +1,6 @@
+{
+  "from": "TELEGRAM_CHAT_ID",
+  "text": "Create a GET /users REST API endpoint",
+  "workdir": "~/my-project",
+  "permission_mode": "acceptEdits"
+}
