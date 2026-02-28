@@ -120,12 +120,12 @@ def download_audio(audio_url, output_path):
 
 def transcribe_audio(audio_path, output_path):
     """使用 faster-whisper 轉文字"""
-    print(f"\n🎤 轉文字中 (Whisper tiny)...")
+    print(f"\n🎤 轉文字中 (Whisper base)...")
     
     # 直接用 subprocess 執行 faster-whisper
     cmd = f"""
 from faster_whisper import WhisperModel
-model = WhisperModel("tiny", device="cpu", compute_type="int8")
+model = WhisperModel("base", device="cpu", compute_type="int8")
 segments, info = model.transcribe("{audio_path}", language="zh")
 with open("{output_path}", "w", encoding="utf-8") as f:
     for segment in segments:

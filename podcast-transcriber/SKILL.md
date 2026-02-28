@@ -66,8 +66,10 @@ python3 scripts/transcribe.py --podcast "<podcast_name>" --format summary
 |-------|------|
 | Search | Apple Podcasts API |
 | Download | yt-dlp |
-| Transcribe | faster-whisper (tiny model) |
+| Transcribe | faster-whisper (**base** model) |
 | Output | .txt file |
+
+> ⚠️ IMPORTANT: Use `base` model (not `tiny`). Tiny model produces garbled Chinese text. Base model gives much better quality.
 
 ## Installation Requirements
 
