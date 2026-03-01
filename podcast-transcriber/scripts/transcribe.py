@@ -23,7 +23,7 @@ import urllib.parse
 WHISPER_VENV = "/tmp/whisper-venv/bin/python3"
 OUTPUT_DIR = "/tmp/podcast-transcribe"
 NOTEBOOKLM_CLI = "/opt/homebrew/bin/notebooklm"
-MARKETING_NOTEBOOK_ID = "12e590d2-e85c-49b5-a5b2-5c30aff1fc48"
+MARKETING_NOTEBOOK_ID = os.environ.get("NOTEBOOKLM_NOTEBOOK_ID", "")
 
 def run_cmd(cmd, capture=True):
     """執行 shell 命令"""
