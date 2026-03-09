@@ -1,0 +1,227 @@
+#!/bin/bash
+# Task Kanban Automation Script v4
+# 掃描 Todo 欄位 → 依 assignee 路由 → 自動流轉
+# assignee: claude-code | openclaw | antigravity → 執行
+# assignee: Alan | user | human                  → 移到 Blocked
+# step1~4 + current_step                         → 多步驟自動交棒
+
+set -e
+
+# 設定
+KANBAN_DIR="$HOME/repos/Obsidian Vault/Task Kanban"
+KANBAN_FILE="$KANBAN_DIR/Kanban.md"
+TASK_DIR="$KANBAN_DIR/task"
+LOG_FILE="$HOME/.openclaw/skills/task-kanban-mcp/logs/job.log"
+
+# Timeout 設定（秒）
+EXEC_TIMEOUT=120
+TIMEOUT_CMD="/opt/homebrew/opt/coreutils/libexec/gnubin/timeout"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# 解析 YAML 欄位
+get_yaml_field() {
+    local file="$1"
+    local field="$2"
+    sed -n "s/^${field}: *//p" "$file" | head -1
+}
+
+# 找 Todo 欄位的任務
+get_todo_tasks() {
+    local in_todo=false
+    while IFS= read -r line; do
+        if [[ "$line" == *"## 📅 Todo"* ]]; then
+            in_todo=true
+            continue
+        fi
+        [[ "$in_todo" == true && "$line" =~ \[\[([^\]]+)\]\] ]] && echo "${BASH_REMATCH[1]}"
+        [[ "$in_todo" == true && "$line" =~ ^## ]] && break
+    done < "$KANBAN_FILE"
+}
+
+# 執行 Agent（加 timeout）
+execute_agent() {
+    local task_name="$1"
+    local assignee="$2"
+    local description="$3"
+
+    log "Executing $task_name with $assignee (timeout: ${EXEC_TIMEOUT}s)..."
+
+    case "$assignee" in
+        "claude-code")
+            $TIMEOUT_CMD "$EXEC_TIMEOUT" bash -c "claude -p --print --permission-mode=bypassPermissions" <<< "$description" 2>&1
+            return $?
+            ;;
+        "openclaw")
+            local payload response
+            payload=$(jq -n --arg input "$description" '{"model":"main","input":$input}')
+            response=$($TIMEOUT_CMD "$EXEC_TIMEOUT" curl -s -X POST http://127.0.0.1:18789/v1/responses \
+                -H "Authorization: Bearer bc522b30b01169cb17326b3399c4b38c09d98696ce7bc870" \
+                -H "Content-Type: application/json" \
+                -d "$payload" 2>&1)
+            echo "$response"
+            # 有 error 欄位視為失敗
+            echo "$response" | grep -q '"error"' && return 1
+            return 0
+            ;;
+        "antigravity")
+            $TIMEOUT_CMD "$EXEC_TIMEOUT" python3 /tmp/ask_antigravity.py "$description" 2>&1
+            return $?
+            ;;
+        *)
+            log "Unknown assignee: $assignee"
+            return 1
+            ;;
+    esac
+}
+
+# 搬移卡片
+move_card() {
+    local task_name="$1"
+    local to_status="$2"
+
+    log "Moving $task_name to $to_status"
+
+    local target_section=""
+    case "$to_status" in
+        "running") target_section="## 🚀 In Progress" ;;
+        "review")  target_section="## 👀 Review" ;;
+        "done")    target_section="## ✅ Done" ;;
+        "blocked") target_section="## 🚫 Blocked" ;;
+        "todo")    target_section="## 📅 Todo" ;;
+        *) log "Unknown status: $to_status"; return 1 ;;
+    esac
+
+    # 從所有欄位移除（精確匹配）
+    sed -i '' "s/^- \[ \] \[\[$task_name\]\]$//" "$KANBAN_FILE"
+    sed -i '' "s/^- \[x\] \[\[$task_name\]\]$//" "$KANBAN_FILE"
+
+    # 加入目標欄位
+    sed -i '' "/$target_section/a\\
+- [ ] [[$task_name]]" "$KANBAN_FILE"
+
+    log "Moved $task_name to $to_status"
+}
+
+# 執行成功後：找下一個 step，或結束
+advance_step() {
+    local task_name="$1"
+    local task_file="$TASK_DIR/$task_name.md"
+
+    local current_step
+    current_step=$(get_yaml_field "$task_file" "current_step")
+
+    # 沒有 current_step → 單步任務，直接到 Review
+    if [[ -z "$current_step" ]]; then
+        move_card "$task_name" "review"
+        return
+    fi
+
+    local next_step=$(( current_step + 1 ))
+    local next_assignee
+    next_assignee=$(get_yaml_field "$task_file" "step${next_step}")
+
+    if [[ -n "$next_assignee" ]]; then
+        log "Advancing $task_name: step$current_step → step$next_step ($next_assignee)"
+        python3 -c "
+import re
+with open('$task_file') as f: c = f.read()
+c = re.sub(r'^assignee:.*', 'assignee: $next_assignee', c, flags=re.MULTILINE)
+c = re.sub(r'^current_step:.*', 'current_step: $next_step', c, flags=re.MULTILINE)
+with open('$task_file', 'w') as f: f.write(c)
+"
+        move_card "$task_name" "todo"
+    else
+        log "No more steps for $task_name, moving to Review"
+        move_card "$task_name" "review"
+    fi
+}
+
+# 主流程
+main() {
+    log "=== Task Kanban Job Started ==="
+
+    # 取得 Todo 任務
+    local tasks=()
+    while IFS= read -r task; do
+        [[ -n "$task" ]] && tasks+=("$task")
+    done < <(get_todo_tasks)
+
+    if [[ ${#tasks[@]} -eq 0 ]]; then
+        log "No tasks in Todo"
+        exit 0
+    fi
+
+    log "Found ${#tasks[@]} tasks in Todo"
+
+    for task in "${tasks[@]}"; do
+        log "=== Processing: $task ==="
+        local task_file="$TASK_DIR/$task.md"
+
+        if [[ ! -f "$task_file" ]]; then
+            log "ERROR: Task file not found: $task_file"
+            continue
+        fi
+
+        # 讀取 assignee
+        local assignee
+        assignee=$(get_yaml_field "$task_file" "assignee")
+
+        if [[ -z "$assignee" ]]; then
+            log "WARNING: No assignee for $task, skipping"
+            continue
+        fi
+
+        # assignee 是 user → 移到 Blocked 等待人工處理
+        case "$assignee" in
+            Alan|alan|user|human)
+                log "BLOCKED: $task assignee is user ($assignee), moving to Blocked"
+                move_card "$task" "blocked"
+                continue
+                ;;
+        esac
+
+        # 讀取任務描述（frontmatter 以外的內容）
+        local description full_prompt
+        description=$(awk '/^---$/{n++; next} n>=2' "$task_file" | head -30)
+        full_prompt="【自動化任務】直接完成以下任務，不要詢問確認或等待互動。不確定的地方做最合理的判斷即可。
+
+完成後，請將結果追加到以下任務檔案末尾（路徑含空格，直接使用原始路徑即可）：
+${task_file}
+
+追加格式：
+**${assignee} (YYYY-MM-DD HH:mm):**
+> 你做了什麼的一句話摘要
+
+---
+
+${description}"
+
+        # Per-agent lock：同一個 agent 同時只跑一個任務
+        local agent_lock="/tmp/kanban-lock-${assignee}"
+        if ! mkdir "$agent_lock" 2>/dev/null; then
+            log "SKIP: $assignee is busy (lock exists), skipping $task"
+            continue
+        fi
+
+        # 移動到執行中
+        move_card "$task" "running"
+
+        # 執行（會被 timeout 保護）
+        if execute_agent "$task" "$assignee" "$full_prompt"; then
+            log "SUCCESS: $task step completed"
+            rm -rf "$agent_lock"
+            advance_step "$task"
+        else
+            log "FAILED: $task (exit code: $?)"
+            rm -rf "$agent_lock"
+            move_card "$task" "blocked"
+        fi
+    done
+
+    log "=== Task Kanban Job Finished ==="
+}
+
+main "$@"
