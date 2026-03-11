@@ -40,9 +40,15 @@ echo "Task : $TEXT"
 echo ""
 
 # ---- Run Claude Code (headless + PTY via macOS script), save output to file ----
+# NOTE: script -q is REQUIRED to allocate a PTY — without it Claude Code hangs in headless mode
+# -c flag reconnects to the existing $HOME session to share context
 cd "$WORKDIR"
 unset CLAUDECODE  # prevent "nested session" error when dispatched from within Claude Code
-script -q "$OUTPUT_FILE" "$CLAUDE" -p "$TEXT" --permission-mode "$PERM"
+set +e
+script -q "$OUTPUT_FILE" "$CLAUDE" -c -p "$TEXT" --permission-mode "$PERM"
+CLAUDE_EXIT=$?
+set -e
+echo "$CLAUDE_EXIT" > "$RESULT_DIR/task-exit-code"
 
 echo ""
-echo "Done."
+echo "Done. Exit: $CLAUDE_EXIT"
