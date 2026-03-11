@@ -103,7 +103,7 @@ dispatch_step() {
             ;;
         "antigravity")
             log "Dispatching to Antigravity: $task"
-            python3 /tmp/ask_antigravity.py "$prompt" 2>&1 | tee -a "$LOG_FILE"
+            python3 "$HOME/.openclaw/skills/task-kanban-mcp/scripts/ask_antigravity.py" "$prompt" 2>&1 | tee -a "$LOG_FILE"
             return 0
             ;;
         "Alan")
