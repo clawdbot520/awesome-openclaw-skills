@@ -11,6 +11,7 @@ A collection of custom skills for OpenClaw.
 | [podcast-transcriber](./podcast-transcriber/) | Automatically transcribe Podcast audio to text |
 | [twitter-scraper](./twitter-scraper/) | Scrape X (Twitter) content to Markdown |
 | [smart-scraper](./smart-scraper/) | 7-tier intelligent web scraping framework — auto-fallback from fastest (opencli) to browser |
+| [git-push-review](./git-push-review/) | Safety scanner and checklist for publishing skills to this repo |
 
 ## Installation
 
@@ -21,6 +22,7 @@ cp -r claude-code-memory ~/.openclaw/skills/
 cp -r podcast-transcriber ~/.openclaw/skills/
 cp -r twitter-scraper ~/.openclaw/skills/
 cp -r smart-scraper ~/.openclaw/skills/
+cp -r git-push-review ~/.openclaw/skills/
 ```
 
 ## License
